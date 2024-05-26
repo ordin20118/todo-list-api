@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<div th:replace="~{common/head :: headerLayout}"></div>
+<script>
+
+	function submitData() {
+		
+		var formData = new FormData();
+		
+		let email = $('#email').val();
+		let pw = $('#password').val();		
+		
+		var body = {
+				"email": email,
+				"password": pw
+		}
+
+		var url = "/api/auth/login";
+
+		$.ajax({
+			url:url,
+			type:"post",
+			contentType:'application/json',
+			processData:false,
+			data:JSON.stringify(body),
+			success:function(data){
+				alert("로그인 완료.");								
+				setCookie('access_token', data['access_token'], Date.parse(data['accessExp']));
+				setCookie('refresh_token', data['refresh_token'], Date.parse(data['refreshExp']));
+				location.replace("/page/home");
+			},
+			error:function(request, status, error){
+				alert("로그인 실패");
+			}
+		});
+	}
+	
+	function goToRegistrationPage() {
+		location.href = '/page/registration';
+	}
+		
+	function setCookie(name, value, timestamp) {
+	  var date = new Date();
+	  date.setTime(timestamp);
+	  document.cookie = name + '=' + value + ';expires=' + date.toUTCString() + ';path=/';
+	}
+
+</script>
+<body style="text-align: center; padding: 15px;">
+
+	<h1>로그인</h1>
+	<div class="main">
+         <div class="col-md-6 col-sm-12" style="margin: auto;">
+            <div class="login-form">
+               <form>
+                  <div class="form-group">
+                     <label>Email</label>
+                     <input id="email" type="text" class="form-control" placeholder="Email">
+                  </div>
+                  <div class="form-group">
+                     <label>Password</label>
+                     <input id="password" type="password" class="form-control" placeholder="Password">
+                  </div>
+                  <button type="button" class="btn btn-primary" onclick="submitData()">로그인</button>
+                  <button type="button" class="btn btn-secondary" onclick="goToRegistrationPage()">회원가입</button>
+               </form>
+            </div>
+         </div>
+     </div>
+    
+</body>
+</html>

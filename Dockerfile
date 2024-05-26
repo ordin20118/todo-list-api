@@ -1,0 +1,7 @@
+FROM openjdk:17-jdk-alpine
+WORKDIR /root
+ARG JAR_FILE=target/*.war
+COPY ${JAR_FILE} app.war
+ARG SPRING_PROFILES_ACTIVE
+ENV SPRING_PROFILES_ACTIVE=$SPRING_PROFILES_ACTIVE
+ENTRYPOINT ["java","-jar","app.war"]

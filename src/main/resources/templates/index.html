@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<div th:replace="~{common/head :: headerLayout}"></div>
+<head>
+<style>
+    .status-in-progress {
+      background-color: #ffc107; /* 진행 중 상태의 배경색 */
+    }
+
+    .status-completed {
+      background-color: #28a745; /* 완료 상태의 배경색 */
+    }
+
+    .status-pending {
+      background-color: #6c757d; /* 대기 중 상태의 배경색 */
+    }
+  </style>
+</head>
+<script>
+	
+	var userId = 0;
+	
+	$(document).ready(function(){	
+		var accessToken = getCookie("access_token");
+		
+	 	$('#todoSort').change(function() {
+	        var selectedValue = $(this).val();
+	
+	        // 선택된 값을 변수에 할당
+	        var sortBy;
+	        switch (selectedValue) {
+	          case '1':
+	            sortField = "id";
+				sortOrder = "desc";
+	            break;
+	          case '2':
+	            sortField = "weight";
+				sortOrder = "desc";
+	            break;
+	          case '3':
+	            sortField = "weight";
+				sortOrder = "asc";
+	            break;
+	          default:
+	            sortField = "id";
+				sortOrder = "desc";
+	        }
+	        nowTodoPage = 0;
+			loadTodoList();
+      	});
+
+        // 사용자 정보 조회
+        var userInfo = getUserInfo(accessToken).then(userInfo => {
+	        userId = userInfo.data.id;
+	        
+	        loadTodoList();
+		});
+        
+	});
+	
+	function moveToModifyUser() {
+		location.href = "/page/users/modification/" + userId;
+	}	
+	
+	var sortField = "id";
+	var sortOrder = "desc";
+	var nowTodoPage = 0;	
+	function loadTodoList() {	
+		var accessToken = getCookie("access_token");	
+		// /api/todo/list?userId=27&taskStatus=0&page=0&size=10&sort=weight,desc&sort=id,desc
+		var url = "/api/todo/list?size=10&page="+nowTodoPage+"&sort="+sortField+","+sortOrder;
+		$.ajax({
+			url:url,
+			type:"get",
+			contentType:'application/json',
+			beforeSend: function(xhr) {
+                xhr.setRequestHeader('Authorization', 'Bearer ' + accessToken);
+            },
+			success:function(data){			
+				printTodoList(data.data);
+			},
+			error:function(request, status, error){
+				alert("할 일 목록 조회 실패. \n ss");
+			}
+		});		
+	}
+	
+	function printTodoList(data) {
+		if(nowTodoPage == 0) {
+			$('#todoTbody').empty();
+		}
+		
+		
+		var isLast = data['last'];
+		var content = data['content'];
+			
+		for(var i=0; i<content.length; i++) {
+			var todoInfo = content[i];
+			//var uploader = todo['user']['name'];
+			var id = todoInfo.id;
+			var todo = todoInfo.todo;
+			var taskStatus = getTaskStatusName(todoInfo.taskStatus);
+			var taskStatusColor = getTaskStatusColorClass(todoInfo.taskStatus);
+			var createdAt = relativeTimeFromNow(todoInfo.createdAt);
+			var weight = getWeightName(todoInfo.weight);
+		
+			
+			var item = '<tr data-toggle="collapse" data-target="#collapseTodo'+id+'" aria-expanded="false" aria-controls="collapseTodo'+id+'">' + 
+							'<td class="'+taskStatusColor+'"></td>' +
+				            '<td colspan="1">'+taskStatus+'</td>' +
+				            '<td colspan="5">'+
+				            '' + todo + '' + 
+				            '</td>' +
+				            '<td colspan="1">'+weight+'</td>' + 
+				            
+				            '<td colspan="1">'+createdAt+'</td>' +
+				            '<td>' +
+					          '<button class="btn btn-primary" onclick="showModifyModal('+id+', \''+todoInfo.todo+'\', '+todoInfo.weight+')">수정</button>' +
+					          '<button class="btn btn-danger" onclick="deleteTodo('+id+')">삭제</button>' +
+					        '</td>' +
+				        '</tr>';
+				        
+			var statusBtnList = '';
+			if(todoInfo.taskStatus == 0) {
+				statusBtnList += ' <button class="btn btn-warning" onclick="updateTodoStatus('+id+', 1)">진행중</button>' +
+			        ' <button class="btn btn-success" onclick="updateTodoStatus('+id+', 2)">완료</button>';
+			} else if(todoInfo.taskStatus == 1) {
+				statusBtnList += ' <button class="btn btn-dark" onclick="updateTodoStatus('+id+', 3)">대기</button>' +
+			        ' <button class="btn btn-success" onclick="updateTodoStatus('+id+', 2)">완료</button>';
+			} else if(todoInfo.taskStatus == 2) {
+			} else if(todoInfo.taskStatus == 3) {
+				  statusBtnList += ' <button class="btn btn-light" onclick="updateTodoStatus('+id+', 0)">할 일</button>' +
+			        ' <button class="btn btn-warning" onclick="updateTodoStatus('+id+', 1)">진행중</button>' +
+			        ' <button class="btn btn-success" onclick="updateTodoStatus('+id+', 2)">완료</button>';
+			} 
+				        
+			item += '<tr class="collapse" id="collapseTodo'+id+'">' + 
+						'<td colspan="1"></td>' +
+						'<td colspan="2"></td>' +
+				        '<td colspan="4">' +
+				      	statusBtnList +
+				        '</td>' +
+				        '<td colspan="1"></td>' +
+				        '<td colspan="1"></td>' +
+				        '<td colspan="1"></td>' + 
+			      	'</tr>';
+			
+				        
+			$('#todoTbody').append(item);			
+		}
+		
+		$("#todoMoreBtn").attr("disabled", isLast);
+		
+		nowTodoPage = nowTodoPage + 1;		
+	}
+	
+	function logout() {
+		var accessToken = getCookie("access_token");		
+		var url = "/api/auth/logout";
+		
+		$.ajax({
+			url:url,
+			type:"post",
+			contentType:'application/json',
+			beforeSend: function(xhr) {
+                xhr.setRequestHeader('Authorization', 'Bearer ' + accessToken);
+            },
+			success:function(data){
+				alert("로그아웃 완료.");
+				location.replace("/page/login");
+			},
+			error:function(request, status, error){
+				alert("로그아웃 실패");
+			}
+		});
+		
+	}
+	
+	
+	
+	function showInputModal() {
+	    $('#todoModal').modal('show');
+	}
+	
+	function closeModal() {
+		$('#todoModal').modal('hide');
+	}
+	
+	function initInputModal() {
+		$('#todoText').val('');
+		$('#todoWeight').val(30);
+	}
+	
+	function showModifyModal(id, todo, weight) {
+		$('#todoId').val(id);
+		$('#todoTextU').val(todo);
+		$('#todoWeightU').val(weight);
+		$('#todoModalU').modal('show');
+	}
+	function closeModalU() {
+		$('#todoModalU').modal('hide');
+	}
+	
+	function saveTodo() {
+		var accessToken = getCookie("access_token");
+		var todoText = $('#todoText').val();
+		var todoWeight = $('#todoWeight').val();
+		
+		if(todoText == null || todoText.length == 0) {
+			alert("할 일을 입력해 주세요.");
+		}
+		
+		var todoData = {
+		    todo: todoText,
+		    weight: todoWeight
+		};
+		
+		var url = "/api/todo";
+		$.ajax({
+			url:url,
+			type:"post",
+			contentType:'application/json',
+			data: JSON.stringify(todoData),
+			beforeSend: function(xhr) {
+                xhr.setRequestHeader('Authorization', 'Bearer ' + accessToken);
+            },
+			success:function(data){
+				alert("등록 완료.");
+				$('#todoModal').modal('hide');
+				initTodoList();		
+				initInputModal();		
+			},
+			error:function(request, status, error){
+				alert("등록 실패");
+			}
+		});
+		
+	}
+	
+	function updateTodo() {
+		var accessToken = getCookie("access_token");
+		var id = $('#todoId').val();
+		var todoText = $('#todoTextU').val();
+		var todoWeight = $('#todoWeightU').val();
+		
+		if(todoText == null || todoText.length == 0) {
+			alert("할 일을 입력해 주세요.");
+		}
+		
+		var todoData = {
+			id: id,
+		    todo: todoText,
+		    weight: todoWeight
+		};
+		
+		var url = "/api/todo/" + id;
+		$.ajax({
+			url:url,
+			type:"put",
+			contentType:'application/json',
+			data: JSON.stringify(todoData),
+			beforeSend: function(xhr) {
+                xhr.setRequestHeader('Authorization', 'Bearer ' + accessToken);
+            },
+			success:function(data){
+				alert("수정 완료.");
+				$('#todoModalU').modal('hide');
+				initTodoList();				
+			},
+			error:function(request, status, error){
+				alert("수정 실패");
+			}
+		});
+	}
+	
+	function updateTodoStatus(id, status) {
+		var accessToken = getCookie("access_token");
+		
+		
+		var todoData = {
+			id: id,
+		    taskStatus: status
+		};
+		
+		var url = "/api/todo/" + id;
+		$.ajax({
+			url:url,
+			type:"patch",
+			contentType:'application/json',
+			data: JSON.stringify(todoData),
+			beforeSend: function(xhr) {
+                xhr.setRequestHeader('Authorization', 'Bearer ' + accessToken);
+            },
+			success:function(data){
+				if(data.success) {
+					alert("수정 완료.");
+					$('#todoModalU').modal('hide');
+					initTodoList();	
+				} else {
+					alert("수정 실패.");;
+				}				
+			},
+			error:function(request, status, error){
+				alert("수정 실패");
+			}
+		});
+	}
+	
+	
+	function deleteTodo(id) {
+		var accessToken = getCookie("access_token");
+		var url = "/api/todo/" + id;
+		
+		$.ajax({
+			url:url,
+			type:"delete",
+			contentType:'application/json',
+			beforeSend: function(xhr) {
+                xhr.setRequestHeader('Authorization', 'Bearer ' + accessToken);
+            },
+			success:function(data){
+				alert("할 일 제거 완료.");
+				initTodoList();
+			},
+			error:function(request, status, error){
+				alert("할 일 제거 실패.");
+				initTodoList();
+			}
+		})
+		
+	}
+	
+	function initTodoList() {
+		nowTodoPage = 0;
+		sortField = "id";
+		sortOrder = "desc";
+		loadTodoList();
+	}
+	
+	
+</script>
+<style>
+	.box {		
+		text-align: center;
+		padding: 10px;	
+	}
+	
+	table {
+		margin: auto;
+		height: 100%;
+	  	width: 100%;
+	}
+	
+</style>
+<body style="text-align: center;">
+
+	
+	<!-- Input Modal -->
+	<div class="modal fade" id="todoModal" tabindex="-1" aria-labelledby="modalTitle" aria-hidden="true">
+	  <div class="modal-dialog">
+	    <div class="modal-content">
+	      <div class="modal-header">
+	        <h5 class="modal-title" id="modalTitle">할 일 등록</h5>
+	        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+	      </div>
+	      <div class="modal-body">
+	        <form id="modalForm">
+	          <div class="mb-3">
+	            <input type="text" class="form-control" id="todoText" placeholder="해야 할 일을 적어주세요.">
+	          </div>
+	          <div class="mb-3">
+	            <label for="importanceSelect" class="form-label">우선 순위</label>
+	            <select class="form-select" id="todoWeight">
+	              <option value=30>보통</option>
+	              <option value=20>낮음</option>
+	              <option value=50>높음</option>
+	              <option value=80>매우 높음</option>
+	            </select>
+	          </div>
+	        </form>
+	      </div>
+	      <div class="modal-footer">
+	        <button type="button" class="btn btn-secondary" onclick="closeModal()">닫기</button>
+	        <button type="button" class="btn btn-primary" onclick="saveTodo()">등록</button>
+	      </div>
+	    </div>
+	  </div>
+	</div>
+	
+	<!-- Update Modal -->
+	<div class="modal fade" id="todoModalU" tabindex="-1" aria-labelledby="modalUpdateTitle" aria-hidden="true">
+	  <div class="modal-dialog">
+	    <div class="modal-content">
+	      <div class="modal-header">
+	        <h5 class="modal-title" id="modalUpdateTitle">할 일 수정</h5>
+	        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+	      </div>
+	      <div class="modal-body">
+	        <form id="modalForm">
+	          <div class="mb-3">
+	          	<input type="text" class="form-control" id="todoId" style="display: none;">
+	            <input type="text" class="form-control" id="todoTextU" placeholder="해야 할 일을 적어주세요.">
+	          </div>
+	          <div class="mb-3">
+	            <label for="importanceSelect" class="form-label">우선 순위</label>
+	            <select class="form-select" id="todoWeightU">
+	              <option value=30>보통</option>
+	              <option value=20>낮음</option>
+	              <option value=50>높음</option>
+	              <option value=80>매우 높음</option>
+	            </select>
+	          </div>
+	        </form>
+	      </div>
+	      <div class="modal-footer">
+	        <button type="button" class="btn btn-secondary" onclick="closeModalU()">닫기</button>
+	        <button type="button" class="btn btn-primary" onclick="updateTodo()">수정</button>
+	      </div>
+	    </div>
+	  </div>
+	</div>
+	
+	<nav class="navbar navbar-expand-lg navbar-dark bg-dark">		
+	  	<a class="navbar-brand" href="/page/home">ToDo</a>
+	  	<button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+	    	<span class="navbar-toggler-icon"></span>
+	  	</button>
+	  	<div class="collapse navbar-collapse" id="navbarNav">
+		    <ul class="navbar-nav">		      
+		      <li class="nav-item" onclick="moveToModifyUser()">
+		        <a class="nav-link" href="#">내 정보 수정</a>
+		      </li>
+		      <li class="nav-item" onclick="logout()">
+		        <a class="nav-link" href="#">로그아웃</a>
+		      </li>
+		    </ul>
+		</div>
+	</nav><br><br><br>
+			
+	<th:block class="box">
+		<h2>ToDo List</h2>		
+		<div class="box" style="width: 90%; margin:auto; text-align: right;">
+			<select id="todoSort" class="form-select" aria-label="sort select">
+			  <option selected value="1">최신순</option>
+			  <option value="2">우선순위 높은 순</option>
+			  <option value="3">우선순위 낮은 순</option>
+			</select>
+			<button type="button" class="btn btn-outline-success" onclick="showInputModal()">할 일 등록</button>
+		</div>		
+		<div class="box" style="height: 50%; overflow: auto;">
+			<table class="table">
+			    <thead>
+			        <tr>
+			        	<th colspan="1"></th>
+			            <th colspan="1">상 태</th>
+			            <th colspan="5">할 일</th>
+			            <th colspan="1">우선순위</th>
+			            <th colspan="1">등록일</th>
+			            <th colspan="1"></th>
+			        </tr>
+			    </thead>
+			    <tbody id="todoTbody">
+
+			    </tbody>
+			</table>			
+		</div>		
+		<input id="todoMoreBtn" onclick="loadTodoList()" type="button" value="더 보기" class="btn btn-primary" style="font-size: 15px; width: 80%; margin: auto;"/>
+	</th:block>
+	
+</body>
+</html>
